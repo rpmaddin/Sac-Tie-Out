@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent Management Hub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background: white;
+      font-size: 18px;
+      color: #666;
+    }
+    .error {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background: white;
+      font-size: 16px;
+      color: #d9534f;
+      padding: 20px;
+      text-align: center;
+    }
+    .error-code {
+      font-family: monospace;
+      background: #f5f5f5;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 4px;
+      max-width: 600px;
+      overflow-y: auto;
+      max-height: 300px;
+      text-align: left;
+      font-size: 12px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="loading">Loading widget...</div>
+
+  <script>
+    // Configuration
+    const API_BASE_URL = "http://localhost:3000/api";
+    const DEBUG = true;
+
+    // Logging utility
+    const log = (msg, data) => {
+      if (DEBUG) console.log(`[Widget] ${msg}`, data || "");
+    };
+
+    const error = (msg, err) => {
+      console.error(`[Widget Error] ${msg}`, err);
+    };
+
+    // Check if backend is accessible
+    const checkBackend = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/health`, { 
+          method: "GET",
+          timeout: 5000 
+        });
+        if (response.ok) {
+          log("Backend is accessible");
+          return true;
+        }
+      } catch (err) {
+        error("Cannot reach backend", err);
+      }
+      return false;
+    };
+
+    // Load external widget file
+    const loadWidget = async () => {
+      const app = document.getElementById("app");
+      
+      try {
+        // Check backend first
+        app.innerHTML = '<div class="loading">Checking backend connection...</div>';
+        const backendOk = await checkBackend();
+        if (!backendOk) {
+          throw new Error("Backend not accessible at " + API_BASE_URL);
+        }
+
+        // Load the widget script
+        app.innerHTML = '<div class="loading">Loading widget interface...</div>';
+        const response = await fetch("./SAC-AI-Agent-Management-Hub.js", { cache: "no-store" });
+        if (!response.ok) throw new Error("Failed to load SAC-AI-Agent-Management-Hub.js");
+        
+        const scriptText = await response.text();
+        const script = document.createElement("script");
+        script.textContent = scriptText;
+        document.body.appendChild(script);
+
+        // Wait a bit for script to execute
+        await new Promise(r => setTimeout(r, 100));
+
+        // The Hub module registers the custom element before it is mounted.
+        // Use the compatibility tag name supported by the Hub module.
+        app.innerHTML = "";
+        const widget = document.createElement("ai-agent-management-hub");
+        
+        // Initialize with SAC lifecycle method
+        widget.onCustomWidgetAfterUpdate({
+          apiBaseUrl: API_BASE_URL,
+          requestTimeoutMs: "30000",
+          role: "admin",
+          enableDebug: "true",
+          defaultPageSize: "25",
+          chatTemperature: "0.7",
+          chatMaxTokens: "2048"
+        });
+
+        app.appendChild(widget);
+        log("Widget loaded successfully");
+
+        // Listen for events
+        widget.addEventListener("onError", (e) => error("Widget error event", e.detail));
+        widget.addEventListener("onAgentSaved", (e) => log("Agent saved", e.detail));
+        widget.addEventListener("onToolSaved", (e) => log("Tool saved", e.detail));
+
+      } catch (err) {
+        error("Failed to load widget", err);
+        app.innerHTML = `
+          <div class="error">
+            <h2>Failed to load AI Agent Management Hub</h2>
+            <p>${err.message}</p>
+            <div class="error-code">${err.stack}</div>
+            <p style="margin-top: 20px; color: #666; font-size: 14px;">
+              Make sure:<br>
+              ✓ Backend is running at ${API_BASE_URL}<br>
+              ✓ SAC-AI-Agent-Management-Hub.js exists in the same folder<br>
+              ✓ Check browser console (F12) for more details
+            </p>
+          </div>
+        `;
+      }
+    };
+
+    // Start loading
+    log("Initializing AI Agent Management Hub");
+    loadWidget();
+  </script>
+</body>
+</html>
